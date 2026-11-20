@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Grafik dyżurów</title>
+<style>
+* { box-sizing: border-box; font-family: Arial, sans-serif; }
+body { margin: 16px; background: #f8f9fa; color: #222; }
+h1 { text-align: center; font-size: 20px; margin-bottom: 6px; }
+.status { text-align: center; font-size: 13px; color: #555; margin-bottom: 14px; }
+.table-wrap { overflow-x: auto; max-width: 900px; margin: 0 auto; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+table { width: 100%; border-collapse: collapse; min-width: 560px; table-layout: fixed; }
+th, td { border: 2px solid #222; text-align: center; padding: 0; height: 42px; }
+th { background: #e9ecef; font-size: 15px; font-weight: bold; }
+td input {
+width: 100%; height: 100%; border: none; outline: none;
+text-align: center; font-size: 14px; padding: 4px; background: transparent;
+}
+td input:focus { background: #fff9db; }
+.actions { text-align: center; margin-top: 14px; }
+button {
+padding: 8px 16px; font-size: 13px; cursor: pointer;
+background: #fff; border: 1px solid #bbb; border-radius: 4px; color: #333;
+}
+#app { display: none; }
+#lock { max-width: 340px; margin: 60px auto; background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 6px; text-align: center; }
+#lock input { width: 100%; padding: 10px; margin: 12px 0; border: 1px solid #aaa; border-radius: 4px; font-size: 15px; }
+</style>
+</head>
+<body>
+
+<div id="lock">
+<h2 style="font-size:18px; margin:0 0 6px;">Dostęp do grafiku</h2>
+<div style="font-size:13px; color:#666;">Wpisz hasło dla osób zapisujących się</div>
+<input type="password" id="passInput" placeholder="Hasło" />
+<button onclick="sprawdzHaslo()" style="width:100%;">Odblokuj tabelę</button>
+<div id="lockMsg" style="color:#c00; font-size:13px; margin-top:8px;"></div>
+</div>
+
+<div id="app">
+<h1>Grafik dyżurów</h1>
+<div class="status" id="status">Łączenie z bazą...</div>
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>7.00</th>
+<th>9.00</th>
+<th>10.30</th>
+<th>12.00</th>
+<th>13.30</th>
+<th>18.00</th>
+</tr>
+</thead>
+<tbody id="grid"></tbody>
+</table>
+</div>
+
+<div class="actions">
+<button onclick="wyczyscWszystko()">Wyczyść całą tabelę</button>
+</div>
+</div>
+
+<script>
+const DB_URL = "https://dyzuryeucharystia-default-rtdb.europe-west1.firebasedatabase.app";
+const HASLO = "Dyżury";
+
+const ROWS = 10;
+const COLS = 6;
+const grid = document.getElementById("grid");
+const statusEl = document.getElementById("status");
+const inputs = {};
+let polaczono = false;
+
+function sprawdzHaslo() {
+const wpisane = document.getElementById("passInput").value;
+if (wpisane === HASLO) {
+sessionStorage.setItem("grafik_ok", "1");
+pokazAplikacje();
+} else {
+document.getElementById("lockMsg").textContent = "Nieprawidłowe hasło";
+}
+}
+
+function pokazAplikacje() {
+document.getElementById("lock").style.display = "none";
+document.getElementById("app").style.display = "block";
+if (!polaczono) {
+polaczono = true;
+pobierzDane();
+setInterval(pobierzDane, 3000);
+}
+}
+
+for (let r = 0; r < ROWS; r++) {
+const tr = document.createElement("tr");
+for (let c = 0; c < COLS; c++) {
+const td = document.createElement("td");
+const input = document.createElement("input");
+const key = r${r}_c${c};
+input.type = "text";
+input.dataset.key = key;
+
+input.addEventListener("input", () => {
+zapiszKomorke(key, input.value);
+});
+
+inputs[key] = input;
+td.appendChild(input);
+tr.appendChild(td);
+}
+grid.appendChild(tr);
+}
+
+async function zapiszKomorke(key, value) {
+statusEl.textContent = "Zapisywanie...";
+try {
+await fetch(${DB_URL}/dyzury/${key}.json, {
+method: "PUT",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify(value)
+});
+statusEl.textContent = "Zapisano na żywo ✓";
+} catch (e) {
+statusEl.textContent = "Błąd połączenia z bazą";
+}
+}
+
+async function pobierzDane() {
+try {
+const res = await fetch(${DB_URL}/dyzury.json`);
+const data = await res.json() || {};
+for (const key in inputs) {
+if (document.activeElement !== inputs[key]) {
+inputs[key].value = data[key] || "";
+}
+}
+statusEl.textContent = "Połączono – zmiany zapisują się na żywo";
+} catch (e) {
+statusEl.textContent = "Błąd ładowania danych – sprawdź adres bazy";
+}
+}
+
+async function wyczyscWszystko() {
+if (!confirm("Na pewno wyczyścić całą tabelę?")) return;
+await fetch(``${DB_URL}/dyzury.json`, { method: "DELETE" });
+pobierzDane();
+}
+
+if (sessionStorage.getItem("grafik_ok") === "1") {
+pokazAplikacje();
+}
+</script>
+</body>
+</html>
